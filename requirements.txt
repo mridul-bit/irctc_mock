@@ -1,0 +1,6 @@
+django
+djangorestframework
+ django-mongodb-backend
+mysqlclient
+ django-cors-headers
+djangorestframework-simplejwt[crypto]

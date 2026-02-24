@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IRCTC Pro - System Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .hidden { display: none; }
+        .card { margin-bottom: 20px; }
+        #analyticsContent { background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="#">IRCTC Control Panel</a>
+        <span id="userStatus" class="text-white-50">Checking status...</span>
+        <button class="btn btn-outline-danger btn-sm" onclick="logout()">Logout</button>
+    </div>
+</nav>
+
+<div class="container">
+    <div id="authSection" class="row">
+        <div class="col-md-6">
+            <div class="card p-4 shadow-sm">
+                <h3>Login</h3>
+                <input type="email" id="loginEmail" class="form-control mb-2" placeholder="Email">
+                <input type="password" id="loginPass" class="form-control mb-2" placeholder="Password">
+                <button class="btn btn-primary w-100" onclick="login()">Access System</button>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card p-4 shadow-sm">
+                <h3>Register</h3>
+                <input type="text" id="regName" class="form-control mb-2" placeholder="Full Name">
+                <input type="email" id="regEmail" class="form-control mb-2" placeholder="Email">
+                <input type="password" id="regPass" class="form-control mb-2" placeholder="Password">
+                <select id="regRole" class="form-select mb-2">
+                    <option value="USER">Standard User</option>
+                    <option value="ADMIN">System Admin</option>
+                </select>
+                <button class="btn btn-success w-100" onclick="register()">Create Account</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mainApp" class="hidden">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card p-4 shadow-sm">
+                    <h4>Search Trains</h4>
+                    <div class="row g-2 mb-3">
+                        <div class="col"><input type="text" id="src" class="form-control" placeholder="Source"></div>
+                        <div class="col"><input type="text" id="dest" class="form-control" placeholder="Destination"></div>
+                        <div class="col-auto"><button class="btn btn-info" onclick="searchTrains()">Find Trains</button></div>
+                    </div>
+                    <table class="table table-hover">
+                        <thead class="table-dark"><tr><th>Train #</th><th>Source -> Dest</th><th>Available</th><th>Action</th></tr></thead>
+                        <tbody id="trainResults"></tbody>
+                    </table>
+                </div>
+
+                <div class="card p-4 shadow-sm">
+                    <h4>My Bookings</h4>
+                    <button class="btn btn-sm btn-secondary mb-2" onclick="getMyBookings()">Refresh History</button>
+                    <ul id="bookingList" class="list-group"></ul>
+                </div>
+            </div>
+
+            <div id="adminSection" class="col-md-4 hidden">
+    <div class="card p-4 border-danger shadow-sm">
+        <h4 class="text-danger">Admin: Add Train</h4>
+        <input type="text" id="tNum" class="form-control mb-2" placeholder="Train Number">
+        <input type="text" id="tName" class="form-control mb-2" placeholder="Train Name">
+        <input type="text" id="tSrc" class="form-control mb-2" placeholder="Source">
+        <input type="text" id="tDest" class="form-control mb-2" placeholder="Destination">
+        <label class="small">Departure</label>
+        <input type="datetime-local" id="tDep" class="form-control mb-2">
+        <label class="small">Arrival</label>
+        <input type="datetime-local" id="tArr" class="form-control mb-2">
+        <input type="number" id="tSeats" class="form-control mb-2" placeholder="Total Seats">
+        <button class="btn btn-danger w-100" onclick="addTrain()">Deploy Train</button>
+    </div>
+
+    <div class="card p-4 border-warning shadow-sm">
+        <h4> Top 5 Routes</h4>
+        <button class="btn btn-warning btn-sm mb-2" onclick="getAnalytics()">Refresh Stats</button>
+        <div id="analyticsContent">
+            <table class="table table-sm">
+                <thead id="analyticsHead"></thead>
+                <tbody id="analyticsBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card p-4 border-dark shadow-sm">
+        <h4> System Logs (get -source)</h4>
+        <button class="btn btn-dark btn-sm mb-2" onclick="getSystemLogs()">Fetch Logs</button>
+        <div id="logsContent" style="font-size: 0.8rem; max-height: 200px; overflow-y: auto;">
+            <ul id="logList" class="list-group list-group-flush"></ul>
+        </div>
+    </div>
+</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    
+    async function authorizedFetch(url, options = {}) {
+        let accessToken = localStorage.getItem('access');
+        console.log("Access Token:", accessToken);
+        
+       
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        };
+
+        let response = await fetch(url, options);
+
+        
+        if (response.status === 401) {
+            const refresh = localStorage.getItem('refresh');
+            if (refresh) {
+                const refreshRes = await fetch('/api/token/refresh/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ refresh })
+                });
+
+                if (refreshRes.ok) {
+                    const data = await refreshRes.json();
+                    localStorage.setItem('access', data.access);
+                   
+                    options.headers['Authorization'] = `Bearer ${data.access}`;
+                    return await fetch(url, options);
+                }
+            }
+            logout(); 
+        }
+        return response;
+    }
+
+    function updateUI() {
+        const token = localStorage.getItem('access');
+        const role = localStorage.getItem('role');
+        const isLoggedIn = !!token;
+
+        document.getElementById('authSection').classList.toggle('hidden', isLoggedIn);
+        document.getElementById('mainApp').classList.toggle('hidden', !isLoggedIn);
+        document.getElementById('userStatus').innerText = isLoggedIn ? `Active: ${role}` : "Logged Out";
+        
+        if (role === 'ADMIN') document.getElementById('adminSection').classList.remove('hidden');
+        else document.getElementById('adminSection').classList.add('hidden');
+    }
+
+    async function init() {
+        updateUI();
+        const token = localStorage.getItem('access');
+        if (token) {
+            
+            getMyBookings();
+        
+            if (localStorage.getItem('role') === 'ADMIN') {
+                getAnalytics();
+            }
+        }}
+
+   
+    async function login() {
+      
+        const res = await fetch('/api/login/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email: loginEmail.value, password: loginPass.value })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            localStorage.setItem('access', data.access);
+            localStorage.setItem('refresh', data.refresh);
+            localStorage.setItem('role', data.role);
+            updateUI();
+          
+            getMyBookings();
+        } else { alert("Login Failed: " + (data.error || "Check credentials")); }
+    }
+
+    async function register() {
+        const res = await fetch('/api/register/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name: regName.value, 
+                email: regEmail.value, 
+                password: regPass.value, 
+                role: regRole.value
+            })
+        });
+        const data = await res.json();
+        if(res.ok) {
+      
+        localStorage.setItem('access', data.access);
+        localStorage.setItem('refresh', data.refresh);
+        
+        localStorage.setItem('role', regRole.value); 
+        
+        alert("Account Created!");
+        
+        
+        updateUI(); 
+    } else { 
+        alert("Registration Error: " + JSON.stringify(data)); 
+    }
+    }
+
+    async function searchTrains() {
+        const res = await authorizedFetch(`/api/trains/search/?source=${src.value}&destination=${dest.value}`);
+        const trains = await res.json();
+        document.getElementById('trainResults').innerHTML = trains.map(t => `
+            <tr>
+                <td>${t.train_number}</td>
+                <td>${t.source} &rarr; ${t.destination}</td>
+                <td><span class="badge bg-success">${t.available_seats}</span></td>
+                <td><button class="btn btn-sm btn-primary" onclick="bookSeat(${t.id})">Book</button></td>
+            </tr>
+        `).join('');
+    }
+
+    async function bookSeat(id) {
+        const res = await authorizedFetch('/api/bookings/', {
+            method: 'POST',
+            body: JSON.stringify({ train_id: id, seats: 1 })
+        });
+        if(res.ok) { alert("Booked!"); getMyBookings();searchTrains(); }
+        else alert("Booking Failed");
+    }
+
+    async function getMyBookings() {
+        const res = await authorizedFetch('/api/bookings/my/');
+        const data = await res.json();
+        document.getElementById('bookingList').innerHTML = data.map(b => `
+            <li class="list-group-item d-flex justify-content-between">
+                <span><strong>${b.train_details.name}</strong> (${b.train_details.train_number})</span>
+                <span class="text-muted">Seats: ${b.seats_booked}</span>
+            </li>
+        `).join('');
+    }
+
+    async function addTrain() {
+        const res = await authorizedFetch('/api/trains/', {
+            method: 'POST',
+            body: JSON.stringify({
+                train_number: tNum.value,
+                name: tName.value,
+                source: tSrc.value,
+                destination: tDest.value,
+                departure_time: tDep.value,
+                arrival_time: tArr.value,
+                total_seats: tSeats.value,
+                available_seats: tSeats.value
+            })
+        });
+        if(res.ok) { alert("Train Added!"); searchTrains(); }
+    }
+    async function getAnalytics() {
+    const res = await authorizedFetch('/api/analytics/top-routes/');
+    const data = await res.json();
+    
+    const body = document.getElementById('analyticsBody');
+    document.getElementById('analyticsHead').innerHTML = `<tr><th>Route</th><th>Hits</th></tr>`;
+    body.innerHTML = data.map(r => `
+        <tr>
+            <td>${r.source} → ${r.destination}</td>
+            <td><span class="badge bg-warning text-dark">${r.search_count}</span></td>
+        </tr>
+    `).join('');
+}
+
+async function getSystemLogs() {
+    const res = await authorizedFetch('/api/system/logs/');
+    const data = await res.json();
+    
+    const list = document.getElementById('logList');
+    if (data.length === 0) {
+        list.innerHTML = `<li class="list-group-item text-center">No logs found.</li>`;
+        return;
+    }
+    list.innerHTML = data.map(l => `
+        <li class="list-group-item px-0 border-bottom">
+            <div class="d-flex justify-content-between">
+                <strong>User ID: ${l.user_id || 'Guest'}</strong>
+                <span class="badge bg-secondary">${l.timestamp}</span>
+            </div>
+            <div class="mt-1">
+                <span class="text-primary">${l.source}</span> 
+                <span class="text-muted">&rarr;</span> 
+                <span class="text-primary">${l.destination}</span>
+            </div>
+            <small class="text-muted">Execution: ${l.execution_time}</small>
+        </li>
+    `).join('');
+}
+
+    function logout() { localStorage.clear(); location.reload(); }
+
+    init();
+</script>
+</body>
+</html>
