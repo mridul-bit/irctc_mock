@@ -300,6 +300,7 @@ async function getSystemLogs() {
                 <span class="text-primary">${l.destination}</span>
             </div>
             <small class="text-muted">Execution: ${l.execution_time}</small>
+            <small class="badge bg-light text-dark border">${l.endpoint}</small>
         </li>
     `).join('');
 }

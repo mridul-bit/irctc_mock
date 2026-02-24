@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models import Count
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import  permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User, Train, Booking, SearchLog
@@ -184,7 +184,8 @@ class SystemLogsView(APIView):
             "source": log.source,
             "destination": log.destination,
             "execution_time": f"{log.execution_time:.4f}s",
-            "timestamp": log.id.generation_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(log.id, 'generation_time') else "N/A"
+            "timestamp": log.id.generation_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(log.id, 'generation_time') else "N/A",
+            "endpoint": log.endpoint
         } for log in logs]
         
         return Response(data)  
