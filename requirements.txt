@@ -1,6 +1,7 @@
 django
 djangorestframework
  django-mongodb-backend
-mysqlclient
+ mysqlclient
  django-cors-headers
+ djangorestframework-simplejwt
 djangorestframework-simplejwt[crypto]
