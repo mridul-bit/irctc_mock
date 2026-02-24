@@ -10,7 +10,7 @@ class UserSerializer(serializers.ModelSerializer):
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
-        # We use set_password to ensure the password is cryptographically hashed
+        
         password = validated_data.pop('password')
         validated_data['username'] = validated_data.get('email')
         user = User(**validated_data)
@@ -24,7 +24,7 @@ class TrainSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class BookingSerializer(serializers.ModelSerializer):
-    # Nested serializer to include train details in the GET response
+    
     train_details = TrainSerializer(source='train', read_only=True)
     
     class Meta:
